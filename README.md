@@ -1,5 +1,7 @@
 # Minimizing the Probability of Ruin in Retirement
 
+***NOTE: the project is done for Lucas Weatherill from OnTrack Retirement***
+
 ## C# application how to use
 
 ### How to run
