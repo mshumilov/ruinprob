@@ -67,7 +67,6 @@ namespace MinimizeRuinProbability.Model
         public static int Run(string root, int npersons, Gender[] gndrs, int[] ags)
         {
             int prvage = 0;
-            int remyrs;
             int strtage = 0;
             int minmage = 999;
             int maxmage = 0;
@@ -75,17 +74,8 @@ namespace MinimizeRuinProbability.Model
             int minfage = 999;
             int maxfage = 0;
             int maxaFAge = 0;
-            double[][] perspmf;
-            double[][] perscdf;
-            double sumprobs;
             double mchksum = 0;
             double fchksum = 0;
-            //C++ TO C# CONVERTER TODO TASK: C# does not have an equivalent to pointers to value types:
-            //ORIGINAL LINE: double * tdcdf;
-            double[] tdcdf;
-            //C++ TO C# CONVERTER TODO TASK: C# does not have an equivalent to pointers to value types:
-            //ORIGINAL LINE: double * hrates;
-            double[] hrates;
             List<double> mprobs = new List<double>();
             List<double> fprobs = new List<double>();
             // Read age probabilities for M/F into corresponding arrays. These are TD probabilities starting at a given age and will need to be adjusted for each person
@@ -140,8 +130,8 @@ namespace MinimizeRuinProbability.Model
             {
                 fchksum = fchksum + fprobs[i];
             }
-            if (Math.Min(mchksum, fchksum) < 1.00 - Math.Pow(0.1, 15) ||
-                Math.Max(mchksum, fchksum) > 1.00 + Math.Pow(0.1, 15))
+            if (Math.Min(mchksum, fchksum) < 1.00 - 1e-15 ||
+                Math.Max(mchksum, fchksum) > 1.00 + 1e-15)
             {
                 Trace.Write("ERROR: Probabilities in ");
                 Trace.Write(root + Config.AgeProbFile);
@@ -231,7 +221,7 @@ namespace MinimizeRuinProbability.Model
                 Environment.Exit(1);
             }
             // Derive total # years to process for this arrangement (plus 1). (Includes SMax, but no alpha decision is made at SMax.)
-            remyrs = Math.Max(maxaMAge - minmage + 1, maxaFAge - minfage + 1);
+            int remyrs = Math.Max(maxaMAge - minmage + 1, maxaFAge - minfage + 1);
 
             // If the hazard rates file exists remove it.
             if (File.Exists(Path.Combine(root, Config.HrFile)))
@@ -240,10 +230,10 @@ namespace MinimizeRuinProbability.Model
             // Construct the person-specific probability arrays (pmfs and cdfs), shifting each to begin at t=0 which represents the start of retirement.
             // Build array of pointers to individual TD probability arrays (start at time t=0 for each person). Then build inner arrays that will
             // apply to each individual person retiring, containing remyrs elements. (Do this for both the individual person pmfs and cdfs.)
-            perspmf = new double[npersons][];
-            perscdf = new double[npersons][];
-            tdcdf = new double[remyrs];
-            hrates = new double[remyrs];
+            var perspmf = new double[npersons][];
+            var perscdf = new double[npersons][];
+            var tdcdf = new double[remyrs];
+            var hrates = new double[remyrs];
             for (int i = 0; i < npersons; ++i)
             {
                 // Check that age values in parameter file are valid. (Invalid gender values are checked in main().)
@@ -265,7 +255,7 @@ namespace MinimizeRuinProbability.Model
                 perscdf[i] = new double[remyrs];
                 // Populate the individual arrays for each person. These are probabilities of death that
                 // will sum to one and a value exists for each of the remyrs processed by this arrangement.
-                sumprobs = 0.0;
+                var sumprobs = 0.0;
                 for (int j = mprobs.Count - 1; j >= (ags[i] - strtage); j--)
                     sumprobs += gndrs[i] == Gender.M ? mprobs[j] : fprobs[j];
 
@@ -283,7 +273,7 @@ namespace MinimizeRuinProbability.Model
                 // Check that sum of probabilities equals 1 (within floating point precision). If not put out alert.
                 sumprobs = perspmf[i].Sum();
 
-                if (sumprobs < 1.00 - Math.Pow(0.1, 15) || sumprobs > 1.00 + Math.Pow(0.1, 15))
+                if (sumprobs < 1.00 - 1e-15 || sumprobs > 1.00 + 1e-15)
                 {
                     Trace.WriteLine($"Alert: Sum of probabilities for Person {i + 1} is not 1.00.");
                     Trace.WriteLine($"Sum is = {sumprobs}");

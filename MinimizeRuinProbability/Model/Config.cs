@@ -8,7 +8,7 @@ namespace MinimizeRuinProbability.Model
     {
         public const string ConfigsRootDir = "./config/";
 
-        public const string ControlFile = "control1.txt"; // Name of parameter control input file.
+        public const string ControlFile = "control.txt"; // Name of parameter control input file.
         public const string AgeProbFile = "ageprobs.txt"; // Name of age probability input file.
         public const string HrFile = "hrates.txt"; // Name of hazard rate probability output file.
     }

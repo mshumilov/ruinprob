@@ -72,7 +72,7 @@ namespace MinimizeRuinProbability.Model
             bool prMax = false;
             double prevprob = 0;
             var nbuckets = (int)(rfmax * pprec + 0.5);
-            var PrB = new List<int>();
+            var prB = new List<int>();
             string ifname = Path.Combine(root, $"Year_{curyear + 1}_All_Buckets.txt");
             // Array to indicate (0/1) where unique probabilities from prior time point reside.
             var bktPrn = new int[nbuckets];
@@ -115,29 +115,19 @@ namespace MinimizeRuinProbability.Model
                     bktPrn[b - 1] = 1; // This bucket will account for a unique probability.
                 }
                 else if (b > 1 && b < nbuckets)
-                {
                     bktPrn[b - 1] = 0; // This bucket will not account for a unique probability.
-                }
                 else
-                {
                     bktPrn[b - 1] = 1; // First and last buckets will always be processed.
-                }
+
                 if (b == 1)
                     prevprob = 0;
                 // Check for and report issues found in the prior time point's probability file.
-                if (vp[b - 1] < 0 || vp[b - 1] > 1.00 - prhrate + 2.0 * Math.Pow(0.1, 16) ||
-                    vp[b - 1] < prevprob - Math.Pow(0.1, 15))
+                if (vp[b - 1] < 0 || vp[b - 1] > 1.00 - prhrate + 2.0 * 1e-16 ||
+                    vp[b - 1] < prevprob - 1e-15)
                 {
-                    //cout.setf(ios_base.@fixed, ios_base.floatfield);
                     Trace.WriteLine("There is an issue with the previous years data (see below):");
-                    Trace.Write("Vp[");
-                    Trace.Write(b - 2);
-                    Trace.Write("] = ");
-                    Trace.WriteLine(vp[b - 2]);
-                    Trace.Write("Vp[");
-                    Trace.Write(b - 1);
-                    Trace.Write("] = ");
-                    Trace.WriteLine(vp[b - 1]);
+                    Trace.WriteLine($"Vp[{b - 2}] = {vp[b - 2]}");
+                    Trace.WriteLine($"Vp[{b - 1}] = {vp[b - 1]}");
                     Trace.WriteLine("EXITING...getprprobs()...");
                     Console.Read();
                     Environment.Exit(1);
@@ -148,14 +138,12 @@ namespace MinimizeRuinProbability.Model
             // unique probability and thus will be processed during the expected value computation.
             for (var b = 1; b <= nbuckets; ++b)
                 if (bktPrn[b - 1] == 1)
-                    PrB.Add(b);
+                    prB.Add(b);
 
             // For informational purposes.
-            Trace.Write("--> # Unique bucket probs at prior time point reported by getprprobs(): ");
-            Trace.Write(PrB.Count);
-            Trace.Write("\n");
+            Trace.WriteLine($"--> # Unique bucket probs at prior time point reported by getprprobs(): {prB.Count}");
             // Return the vector PrB.
-            return PrB;
+            return prB;
         }
 
     }

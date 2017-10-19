@@ -72,201 +72,190 @@ using System.IO;
 using System.Text;
 using Accord.Statistics.Distributions.Univariate;
 
-
-public static class Optimize
+namespace MinimizeRuinProbability.Model
 {
-    public static int Run(string root, int y, int nyrs, double[] prms, int[] prc, int[] bkts, double[] sprobs, double[] Vp, List<int> PrB)
+    public static class Optimize
     {
-        int pr = prc[0];
-        int pa = prc[1];
-        double smn = prms[0];
-        double svr = prms[1];
-        double bmn = prms[2];
-        double bvr = prms[3];
-        double cv = prms[4];
-        double rfmax = prms[5];
-        double er = prms[6];
-        double prnpwr = prms[7];
-        int nbuckets = (int)(rfmax * pr + 0.5);
-        int nuqbkts = PrB.Count;
-        int prunepnt = 0;
-        int ties;
-        int stalpha = 0;
-        int stbkt = bkts[0];
-        int endbkt = bkts[1];
-        double rf;
-        double alpha;
-        double OPT_alpha = 0;
-        double mean;
-        double std;
-        double[] Ac;
-        double OPT_pruin = 1.0;
-        double cdfval;
-        double eprob;
-        double[] Vc;
-        double rhs_cdf;
-        double lhs_cdf;
-        double pruin = 0;
-        double tiethresh;
-        double pruneprob;
-        NormalDistribution normdist;
-
-        // Create the arrays to hold current year optimal alphas and probabilities.
-        Ac = new double[nbuckets];
-        Vc = new double[nbuckets];
-        // Before processing the current year, run through all buckets using only alpha=100% to find the pruning point.
-        if (stbkt == 0 && endbkt == 0)
+        public static int Run(string root, int y, int nyrs, double[] prms, int[] prc, int[] bkts, double[] sprobs, double[] vp, List<int> PrB)
         {
-            stalpha = pa;
-            stbkt = 1;
-            endbkt = nbuckets;
-        }
+            int pr = prc[0];
+            int pa = prc[1];
+            double smn = prms[0];
+            double svr = prms[1];
+            double bmn = prms[2];
+            double bvr = prms[3];
+            double cv = prms[4];
+            double rfmax = prms[5];
+            double er = prms[6];
+            double prnpwr = prms[7];
+            int nbuckets = (int)(rfmax * pr + 0.5);
+            int nuqbkts = PrB.Count;
+            int prunepnt = 0;
+            int stalpha = 0;
+            int stbkt = bkts[0];
+            int endbkt = bkts[1];
+            double rf;
+            double alpha;
+            double optAlpha = 0;
+            double mean;
+            double std;
+            double optPruin = 1.0;
+            double cdfval;
+            double pruin = 0;
+            NormalDistribution normdist;
 
-        var outputFile = "";
-        // Process year specified.
-        if (y == (nyrs - 1)) // Last decision point (either TD-1 or SMax-1).
-        {
-            if (bkts[0] == 0 && bkts[1] == 0) // This should not happen, return with error.
+            // Create the arrays to hold current year optimal alphas and probabilities.
+            var acArr = new double[nbuckets];
+            var vcArr = new double[nbuckets];
+            // Before processing the current year, run through all buckets using only alpha=100% to find the pruning point.
+            if (stbkt == 0 && endbkt == 0)
             {
-                Trace.Write("ERROR: Attempt to find pruning point at terminal year.");
-                Trace.Write("\n");
-                Trace.Write("EXITING...optimize()...");
-                Trace.Write("\n");
-                Console.Read();
-                Environment.Exit(1);
+                stalpha = pa;
+                stbkt = 1;
+                endbkt = nbuckets;
             }
-            for (int b = stbkt; b <= endbkt; ++b) // Get min PRuin at the last time point.
+
+            var outputFile = "";
+            // Process year specified.
+            if (y == (nyrs - 1)) // Last decision point (either TD-1 or SMax-1).
             {
-                rf = (double)b / pr;
-                for (int a = 0; a <= pa; ++a)
+                if (bkts[0] == 0 && bkts[1] == 0) // This should not happen, return with error.
                 {
-                    alpha = (double)a / pa;
-                    var dalpha = (double)alpha;
-                    mean = (1.00 - (double)er) * (1.00 + dalpha * (double)smn + (1.00 - dalpha) * (double)bmn);
-                    std = (1.00 - (double)er) * Math.Sqrt(Math.Pow(dalpha, 2) * (double)svr + Math.Pow(1.00 - dalpha, 2) * (double)bvr + 2.00 * dalpha * (1.00 - dalpha) * (double)cv);
-                    normdist = new NormalDistribution(mean, std);
-                    cdfval = (double)normdist.DistributionFunction(rf);
-                    if ((a == 0) || (cdfval < 0.5 && cdfval < OPT_pruin) || (cdfval >= 0.5 && cdfval <= OPT_pruin))
-                    {
-                        OPT_pruin = cdfval;
-                        OPT_alpha = alpha;
-                    }
+                    Trace.Write("ERROR: Attempt to find pruning point at terminal year.");
+                    Trace.Write("\n");
+                    Trace.Write("EXITING...optimize()...");
+                    Trace.Write("\n");
+                    Console.Read();
+                    Environment.Exit(1);
                 }
-                Ac[b - 1] = OPT_alpha;
-                Vc[b - 1] = (1.00 - sprobs[y]) * OPT_pruin;
-
-            }
-            // Write results to file. 
-            // These will be loaded to an array when processing the next time point (i.e., the one before this one).
-            outputFile = Path.Combine(root, $"Year_{y}_All_Buckets.txt");
-        }
-        else // Process all other years.
-        {
-            // One-half of the maximum possible PRuin is the tie threshold, in general.
-            tiethresh = (0.5) * ((1.00 - sprobs[y]));
-            // Prune point #2 begins at set number of decimals after max probability for this arrangement.
-            pruneprob = (double)(Math.Floor(Math.Pow(10.0, (double)prnpwr) * (1.00 - (double)sprobs[y])) / Math.Pow(10.0, (double)prnpwr));
-            if (bkts[0] == 0 && bkts[1] == 0)
-            {
-                //C++ TO C# CONVERTER TODO TASK: Calls to 'setf' using two arguments are not converted by C++ to C# Converter:
-                //cout.setf(ios_base.@fixed, ios_base.floatfield);
-                Trace.Write("--> Value of pruneprob reported by optimize() is: ");
-                Trace.Write(pruneprob);
-                Trace.Write("\n");
-            }
-            for (int b = stbkt; b <= endbkt; ++b) // PRuin at any future time point.
-            {
-                ties = 0; // Initialize for le/gt comparisons.
-                rf = (double)b / pr; // Derive ruin factor.
-                OPT_alpha = 99.00; // Initialize to unrealistic value.
-                OPT_pruin = 99.00; // Initialize to unrealistic value.
-                for (int a = stalpha; a <= pa; ++a)
+                for (int b = stbkt; b <= endbkt; ++b) // Get min PRuin at the last time point.
                 {
-                    if ((prunepnt == 0 && (a == stalpha || OPT_pruin > 0.00)) || (prunepnt == 1 && a == pa))
+                    rf = (double)b / pr;
+                    for (int a = 0; a <= pa; ++a)
                     {
                         alpha = (double)a / pa;
-                        var dalpha = (double)alpha;
-                        mean = (1.00 - (double)er) * (1.00 + dalpha * (double)smn + (1.00 - dalpha) * (double)bmn);
-                        std = (1.00 - (double)er) * Math.Sqrt(Math.Pow(dalpha, 2) * (double)svr + Math.Pow(1.00 - dalpha, 2) * (double)bvr + 2.00 * dalpha * (1.00 - dalpha) * (double)cv);
+                        mean = (1.00 - er) * (1.00 + alpha * smn + (1.00 - alpha) * bmn);
+                        std = (1.00 - er) * Math.Sqrt(Math.Pow(alpha, 2) * svr + Math.Pow(1.00 - alpha, 2) * bvr +
+                                                      2.00 * alpha * (1.00 - alpha) * cv);
                         normdist = new NormalDistribution(mean, std);
                         cdfval = (double)normdist.DistributionFunction(rf);
-                        if (cdfval == 1.00)
+                        if ((a == 0) || (cdfval < 0.5 && cdfval < optPruin) || (cdfval >= 0.5 && cdfval <= optPruin))
                         {
-                            eprob = 1.00 - sprobs[y + 1];
+                            optPruin = cdfval;
+                            optAlpha = alpha;
                         }
-                        else
-                        {
-                            //-------------------------------------------------------------------------------------------------------------------//
-                            rhs_cdf = 1.00;
-                            lhs_cdf = (double)normdist.DistributionFunction(rf * (1 + pr/1.5));
-                            eprob = (rhs_cdf - lhs_cdf) * Vp[0]; // First bucket, unique processing.
-                            rhs_cdf = lhs_cdf;
-                            for (int pb = 2; pb <= nuqbkts; ++pb) // All others but last bucket, standard processing
-                            { // for unique probs only.
-                                lhs_cdf = (double)normdist.DistributionFunction(rf * (1.0 + pr / (PrB[pb - 1] + 0.5)));
-                                eprob = eprob + (rhs_cdf - lhs_cdf) * Vp[PrB[pb - 1] - 1];
-                                rhs_cdf = lhs_cdf;
-                            }
-                            eprob = eprob + (rhs_cdf - cdfval) * (1.00 - sprobs[y + 1]); // Last bucket, unique processing.
-                            eprob = eprob / (1.00 - cdfval); // Make the probability conditional.
-                                                             //-------------------------------------------------------------------------------------------------------------------//
-                        }
+                    }
+                    acArr[b - 1] = optAlpha;
+                    vcArr[b - 1] = (1.00 - sprobs[y]) * optPruin;
 
-                        // Deal with numerical instability near zero.
-                        if (ties == 0)
-                        {
-                            pruin = (1.00 - sprobs[y]) * (cdfval + eprob - (cdfval * eprob));
-                            if (pruin > tiethresh)
-                            {
-                                ties = 1;
-                            }
-                        }
-                        // Deal with numerical instability near one.
-                        if (ties == 1)
-                        {
-                            pruin = 1.00 - (sprobs[y] + (1.00 - cdfval) * (1.00 - eprob) - sprobs[y] * (1.00 - cdfval) * (1.00 - eprob));
-                        }
-                        // Update optimal values.
-                        if (a == 0 || ties == 0 && pruin < OPT_pruin || ties == 1 && pruin <= OPT_pruin)
-                        {
-                            OPT_pruin = pruin;
-                            OPT_alpha = alpha;
-                        }
-                    }
                 }
-                // Load optimal values into correspnding arrays.
-                Ac[b - 1] = OPT_alpha;
-                Vc[b - 1] = OPT_pruin;
-                // Set pruning for this timepoints processing, allow for floating point precision diffs.
-                if (prunepnt == 0 && Vc[b - 1] >= pruneprob - (double)(Math.Pow(0.1, 16) + Math.Pow(0.1, 17)))
-                {
-                    prunepnt = 1;
-                    // Initial run finds the (approximate) bucket where pruning starts then uses this information to split the remaining buckets by
-                    // sizes that will run in shortest time. For this run, end the call as soon as the bucket number has been found.
-                    if (bkts[0] == 0 && bkts[1] == 0)
-                    {
-                        Trace.Write("--> Pruning RC returned by optimize() is: ");
-                        Trace.Write(b);
-                        Trace.Write("\n");
-                        return b;
-                    }
-                }
+                // Write results to file. 
+                // These will be loaded to an array when processing the next time point (i.e., the one before this one).
+                outputFile = Path.Combine(root, $"Year_{y}_All_Buckets.txt");
             }
-            // Write current year to file with bucket boundaries contained in the name.
-            outputFile = Path.Combine(root, $"Year_{y}_Buckets_{stbkt}_thru_{endbkt}.txt");
+            else // Process all other years.
+            {
+                // One-half of the maximum possible PRuin is the tie threshold, in general.
+                double tiethresh = (0.5) * ((1.00 - sprobs[y]));
+                // Prune point #2 begins at set number of decimals after max probability for this arrangement.
+                double pruneprob = Math.Floor(Math.Pow(10.0, prnpwr) * (1.00 - sprobs[y])) / Math.Pow(10.0, prnpwr);
+                if (bkts[0] == 0 && bkts[1] == 0)
+                    Trace.WriteLine($"--> Value of pruneprob reported by optimize() is: {pruneprob}");
+
+                for (int b = stbkt; b <= endbkt; ++b) // PRuin at any future time point.
+                {
+                    var ties = 0;
+                    rf = (double)b / pr; // Derive ruin factor.
+                    optAlpha = 99.00; // Initialize to unrealistic value.
+                    optPruin = 99.00; // Initialize to unrealistic value.
+                    for (int a = stalpha; a <= pa; ++a)
+                    {
+                        if ((prunepnt == 0 && (a == stalpha || optPruin > 0.00)) || (prunepnt == 1 && a == pa))
+                        {
+                            alpha = (double)a / pa;
+                            var dalpha = (double)alpha;
+                            mean = (1.00 - (double)er) * (1.00 + dalpha * (double)smn + (1.00 - dalpha) * (double)bmn);
+                            std = (1.00 - (double)er) * Math.Sqrt(Math.Pow(dalpha, 2) * (double)svr + Math.Pow(1.00 - dalpha, 2) * (double)bvr + 2.00 * dalpha * (1.00 - dalpha) * (double)cv);
+                            normdist = new NormalDistribution(mean, std);
+                            cdfval = (double)normdist.DistributionFunction(rf);
+                            double eprob;
+                            if (Math.Abs(cdfval - 1) < 1e-16)
+                            {
+                                eprob = 1.00 - sprobs[y + 1];
+                            }
+                            else
+                            {
+                                //-------------------------------------------------------------------------------------------------------------------//
+                                var rhsCdf = 1.00;
+                                double lhsCdf = normdist.DistributionFunction(rf * (1 + pr/1.5));
+                                eprob = (rhsCdf - lhsCdf) * vp[0]; // First bucket, unique processing.
+                                rhsCdf = lhsCdf;
+                                for (int pb = 2; pb <= nuqbkts; ++pb) // All others but last bucket, standard processing
+                                { // for unique probs only.
+                                    lhsCdf = normdist.DistributionFunction(rf * (1.0 + pr / (PrB[pb - 1] + 0.5)));
+                                    eprob = eprob + (rhsCdf - lhsCdf) * vp[PrB[pb - 1] - 1];
+                                    rhsCdf = lhsCdf;
+                                }
+                                eprob = eprob + (rhsCdf - cdfval) * (1.00 - sprobs[y + 1]); // Last bucket, unique processing.
+                                eprob = eprob / (1.00 - cdfval); // Make the probability conditional.
+                                //-------------------------------------------------------------------------------------------------------------------//
+                            }
+
+                            // Deal with numerical instability near zero.
+                            if (ties == 0)
+                            {
+                                pruin = (1.00 - sprobs[y]) * (cdfval + eprob - (cdfval * eprob));
+                                if (pruin > tiethresh)
+                                {
+                                    ties = 1;
+                                }
+                            }
+                            // Deal with numerical instability near one.
+                            if (ties == 1)
+                            {
+                                pruin = 1.00 - (sprobs[y] + (1.00 - cdfval) * (1.00 - eprob) -
+                                                sprobs[y] * (1.00 - cdfval) * (1.00 - eprob));
+                            }
+                            // Update optimal values.
+                            if (a == 0 || ties == 0 && pruin < optPruin || ties == 1 && pruin <= optPruin)
+                            {
+                                optPruin = pruin;
+                                optAlpha = alpha;
+                            }
+                        }
+                    }
+                    // Load optimal values into correspnding arrays.
+                    acArr[b - 1] = optAlpha;
+                    vcArr[b - 1] = optPruin;
+                    // Set pruning for this timepoints processing, allow for floating point precision diffs.
+                    if (prunepnt == 0 && vcArr[b - 1] >= pruneprob - 1e-16 + 1e-17)
+                    {
+                        prunepnt = 1;
+                        // Initial run finds the (approximate) bucket where pruning starts then uses this information to split the remaining buckets by
+                        // sizes that will run in shortest time. For this run, end the call as soon as the bucket number has been found.
+                        if (bkts[0] == 0 && bkts[1] == 0)
+                        {
+                            Trace.WriteLine($"--> Pruning RC returned by optimize() is: {b}");
+                            return b;
+                        }
+                    }
+                }
+                // Write current year to file with bucket boundaries contained in the name.
+                outputFile = Path.Combine(root, $"Year_{y}_Buckets_{stbkt}_thru_{endbkt}.txt");
             
+            }
+
+            var sb = new StringBuilder();
+            for (int b = stbkt; b <= endbkt; ++b)
+            {
+                //fout.setf(ios_base.@fixed, ios_base.floatfield);
+                var vc = $"{vcArr[b - 1]:F50}";
+                sb.AppendLine($"{y} {(double)b / pr:F10} {vc} {acArr[b - 1]:F10}");
+            }
+            File.WriteAllText(outputFile, sb.ToString());
+
+            return 0;
         }
 
-        var sb = new StringBuilder();
-        for (int b = stbkt; b <= endbkt; ++b)
-        {
-            //fout.setf(ios_base.@fixed, ios_base.floatfield);
-            var vc = $"{Vc[b - 1]:F50}";
-            sb.AppendLine($"{y} {(double)b / pr:F10} {vc} {Ac[b - 1]:F10}");
-        }
-        File.WriteAllText(outputFile, sb.ToString());
-
-        return 0;
     }
-
 }

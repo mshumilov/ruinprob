@@ -43,9 +43,9 @@ namespace MinimizeRuinProbability.Helpers
             if (unwantedSequence != null)
             {
                 nextChar = '\0';
-                for (int charIndex = 0; charIndex < unwantedSequence.Length; charIndex++)
+                foreach (char t in unwantedSequence)
                 {
-                    if (char.IsWhiteSpace(unwantedSequence[charIndex]))
+                    if (char.IsWhiteSpace(t))
                     {
                         //ignore all subsequent white space:
                         while (char.IsWhiteSpace(nextChar = (char)System.Console.Read()))
@@ -56,7 +56,7 @@ namespace MinimizeRuinProbability.Helpers
                     {
                         //ensure each character matches the expected character in the sequence:
                         nextChar = (char)System.Console.Read();
-                        if (nextChar != unwantedSequence[charIndex])
+                        if (nextChar != t)
                             return null;
                     }
                 }

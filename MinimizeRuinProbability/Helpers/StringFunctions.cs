@@ -5,6 +5,9 @@
 //	This class provides the ability to replicate various classic C string functions
 //	which don't have exact equivalents in the .NET Framework.
 //----------------------------------------------------------------------------------------
+
+using System;
+
 namespace MinimizeRuinProbability.Helpers
 {
     internal static class StringFunctions
@@ -61,7 +64,7 @@ namespace MinimizeRuinProbability.Helpers
         //------------------------------------------------------------------------------------
         internal static string StrStr(string stringToSearch, string stringToFind)
         {
-            int index = stringToSearch.IndexOf(stringToFind);
+            int index = stringToSearch.IndexOf(stringToFind, StringComparison.Ordinal);
             if (index > -1)
                 return stringToSearch.Substring(index);
             else
@@ -73,45 +76,45 @@ namespace MinimizeRuinProbability.Helpers
         //	Note that the .NET string 'Split' method cannot be used to replicate 'strtok' since
         //	it doesn't allow changing the delimiters between each token retrieval.
         //------------------------------------------------------------------------------------
-        private static string activeString;
-        private static int activePosition;
+        private static string _activeString;
+        private static int _activePosition;
         internal static string StrTok(string stringToTokenize, string delimiters)
         {
             if (stringToTokenize != null)
             {
-                activeString = stringToTokenize;
-                activePosition = -1;
+                _activeString = stringToTokenize;
+                _activePosition = -1;
             }
 
             //the stringToTokenize was never set:
-            if (activeString == null)
+            if (_activeString == null)
                 return null;
 
             //all tokens have already been extracted:
-            if (activePosition == activeString.Length)
+            if (_activePosition == _activeString.Length)
                 return null;
 
             //bypass delimiters:
-            activePosition++;
-            while (activePosition < activeString.Length && delimiters.IndexOf(activeString[activePosition]) > -1)
+            _activePosition++;
+            while (_activePosition < _activeString.Length && delimiters.IndexOf(_activeString[_activePosition]) > -1)
             {
-                activePosition++;
+                _activePosition++;
             }
 
             //only delimiters were left, so return null:
-            if (activePosition == activeString.Length)
+            if (_activePosition == _activeString.Length)
                 return null;
 
             //get starting position of string to return:
-            int startingPosition = activePosition;
+            int startingPosition = _activePosition;
 
             //read until next delimiter:
             do
             {
-                activePosition++;
-            } while (activePosition < activeString.Length && delimiters.IndexOf(activeString[activePosition]) == -1);
+                _activePosition++;
+            } while (_activePosition < _activeString.Length && delimiters.IndexOf(_activeString[_activePosition]) == -1);
 
-            return activeString.Substring(startingPosition, activePosition - startingPosition);
+            return _activeString.Substring(startingPosition, _activePosition - startingPosition);
         }
     }
 }
